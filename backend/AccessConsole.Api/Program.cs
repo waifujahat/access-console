@@ -6,21 +6,25 @@
  * Configures application, health checks and account management endpoints
  */
 
-using System.Collections.Concurrent;
+using Waifujahat.AccessConsole.Api.Application.Accounts;
 using Waifujahat.AccessConsole.Api.Contracts.Accounts;
 using Waifujahat.AccessConsole.Api.Domain.Accounts;
+using Waifujahat.AccessConsole.Api.Infrastructure.Persistence;
 
 var Builder = WebApplication.CreateBuilder(args);
 
 Builder.Services.AddHealthChecks();
 
-var App = Builder.Build();
+Builder.Services.AddSingleton<IAccountRepository, InMemoryAccountRepository>();
 
-var AkunSementara = new ConcurrentDictionary<Guid, Account>();
+var App = Builder.Build();
 
 App.MapHealthChecks("/health");
 
-App.MapPost("/api/accounts", (CreateAccountRequest Permintaan) =>
+App.MapPost("/api/accounts", async (
+    CreateAccountRequest Permintaan,
+    IAccountRepository Repositori,
+    CancellationToken TokenPembatalan) =>
 {
     try
     {
@@ -28,7 +32,7 @@ App.MapPost("/api/accounts", (CreateAccountRequest Permintaan) =>
             Permintaan.Email,
             Permintaan.DisplayName);
 
-        AkunSementara[AkunBaru.Id] = AkunBaru;
+        await Repositori.AddAsync(AkunBaru, TokenPembatalan);
 
         var Respons = new AccountResponse(
             AkunBaru.Id,
@@ -40,20 +44,25 @@ App.MapPost("/api/accounts", (CreateAccountRequest Permintaan) =>
             $"/api/accounts/{AkunBaru.Id}",
             Respons);
     }
-    catch (ArgumentException Kesalahan)
+    catch (ArgumentException Error)
     {
         return Results.ValidationProblem(
             new Dictionary<string, string[]>
             {
-                [Kesalahan.ParamName ?? "Account"] =
-                    [Kesalahan.Message]
+                [Error.ParamName ?? "Account"] =
+                    [Error.Message]
             });
     }
 });
 
-App.MapGet("/api/accounts/{Id:guid}", (Guid Id) =>
+App.MapGet("/api/accounts/{Id:guid}", async (
+    Guid Id,
+    IAccountRepository Repositori,
+    CancellationToken TokenPembatalan) =>
 {
-    if (!AkunSementara.TryGetValue(Id, out var Akun))
+    var Akun = await Repositori.GetByIdAsync(Id, TokenPembatalan);
+
+    if (Akun is null)
     {
         return Results.NotFound();
     }
