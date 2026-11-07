@@ -6,6 +6,8 @@
  * Configures application, health checks and account management endpoints
  */
 
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Waifujahat.AccessConsole.Api.Application.Accounts;
 using Waifujahat.AccessConsole.Api.Contracts.Accounts;
 using Waifujahat.AccessConsole.Api.Domain.Accounts;
@@ -13,9 +15,20 @@ using Waifujahat.AccessConsole.Api.Infrastructure.Persistence;
 
 var Builder = WebApplication.CreateBuilder(args);
 
+var KoneksiDatabase = Builder.Configuration.GetConnectionString("AccessConsole");
+
+if (string.IsNullOrWhiteSpace(KoneksiDatabase))
+{
+    throw new InvalidOperationException(
+        "Connection string AccessConsole belum dikonfigurasi");
+}
+
 Builder.Services.AddHealthChecks();
 
-Builder.Services.AddSingleton<IAccountRepository, InMemoryAccountRepository>();
+Builder.Services.AddDbContext<AccessConsoleDbContext>(
+    Opsi => Opsi.UseNpgsql(KoneksiDatabase));
+
+Builder.Services.AddScoped<IAccountRepository, PostgresAccountRepository>();
 
 var App = Builder.Build();
 
@@ -53,6 +66,16 @@ App.MapPost("/api/accounts", async (
                     [Error.Message]
             });
     }
+    catch (DbUpdateException Error) when (
+        Error.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "IX_accounts_email"
+        })
+    {
+        return Results.Conflict(
+            new { Pesan = "Email sudah terdaftar" });
+    }
 });
 
 App.MapGet("/api/accounts/{Id:guid}", async (
@@ -77,3 +100,7 @@ App.MapGet("/api/accounts/{Id:guid}", async (
 });
 
 App.Run();
+
+public partial class Program // Exposes application entry point for integration testing
+{
+}
