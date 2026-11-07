@@ -6,14 +6,17 @@
  * Configures account persistence using Entity Framework Core
  */
 
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Waifujahat.AccessConsole.Api.Domain.Accounts;
+using Waifujahat.AccessConsole.Api.Infrastructure.Identity;
 
 namespace Waifujahat
 {
     namespace AccessConsole.Api.Infrastructure.Persistence
     {
-        public sealed class AccessConsoleDbContext : DbContext
+        public sealed class AccessConsoleDbContext : IdentityDbContext<AccessConsoleIdentityUser, IdentityRole<Guid>, Guid>
         {
             public AccessConsoleDbContext(
                 DbContextOptions<AccessConsoleDbContext> Options)
@@ -57,6 +60,15 @@ namespace Waifujahat
 
                     Entitas.HasIndex(Akun => Akun.Email)
                         .IsUnique();
+
+                    ModelBuilder.Entity<AccessConsoleIdentityUser>(Entitas =>
+                    {
+                        Entitas.HasOne<Account>()
+                            .WithOne()
+                            .HasForeignKey<AccessConsoleIdentityUser>(
+                                Pengguna => Pengguna.Id)
+                            .OnDelete(DeleteBehavior.Cascade);
+                    });
                 });
             }
         }

@@ -8,6 +8,7 @@
 
 using Microsoft.EntityFrameworkCore;
 using Waifujahat.AccessConsole.Api.Domain.Accounts;
+using Waifujahat.AccessConsole.Api.Infrastructure.Identity;
 using Waifujahat.AccessConsole.Api.Infrastructure.Persistence;
 
 namespace Waifujahat
@@ -92,6 +93,38 @@ namespace Waifujahat
 
                 Assert.NotNull(Email);
                 Assert.Equal("citext", Email.GetColumnType());
+            }
+
+            [Fact]
+            public void IdentityUserMemilikiRelasiSatuKeSatuDenganAccount()
+            {
+                var Opsi = new DbContextOptionsBuilder<AccessConsoleDbContext>()
+                    .UseNpgsql(
+                        "Host=127.0.0.1;Database=access_console_test;Username=test;Password=unused")
+                    .Options;
+
+                using var Konteks = new AccessConsoleDbContext(Opsi);
+
+                var Entitas = Konteks.Model.FindEntityType(
+                    typeof(AccessConsoleIdentityUser));
+
+                Assert.NotNull(Entitas);
+
+                var Relasi = Assert.Single(Entitas.GetForeignKeys());
+
+                Assert.Equal(
+                    typeof(Account),
+                    Relasi.PrincipalEntityType.ClrType);
+
+                Assert.True(Relasi.IsUnique);
+
+                Assert.Equal(
+                    DeleteBehavior.Cascade,
+                    Relasi.DeleteBehavior);
+
+                Assert.Equal(
+                    nameof(AccessConsoleIdentityUser.Id),
+                    Assert.Single(Relasi.Properties).Name);
             }
         }
     }
