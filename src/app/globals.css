@@ -1,3 +1,12 @@
+/*
+ * Access Console
+ * Author    : waifujahat
+ * Namespace : Waifujahat.AccessConsole.Frontend.Styles
+ * Module    : GlobalStyles
+ *
+ * Defines global fonts, colors and shared base styling.
+ */
+
 @import "tailwindcss";
 
 :root {
