@@ -166,6 +166,38 @@ App.MapGet("/api/accounts/{Id:guid}", async (
     return Results.Ok(Respons);
 }).RequireAuthorization();
 
+App.MapGet("/api/accounts/me", async (
+    HttpContext KonteksHttp,
+    UserManager<AccessConsoleIdentityUser> PengelolaPengguna,
+    IAccountRepository Repositori,
+    CancellationToken TokenPembatalan) =>
+{
+    var IdPengguna = PengelolaPengguna.GetUserId(
+        KonteksHttp.User);
+
+    if (!Guid.TryParse(IdPengguna, out var IdAkun))
+    {
+        return Results.Unauthorized();
+    }
+
+    var Akun = await Repositori.GetByIdAsync(
+        IdAkun,
+        TokenPembatalan);
+
+    if (Akun is null)
+    {
+        return Results.NotFound();
+    }
+
+    var Respons = new AccountResponse(
+        Akun.Id,
+        Akun.Email,
+        Akun.DisplayName,
+        Akun.CreatedatUTC);
+
+    return Results.Ok(Respons);
+}).RequireAuthorization();
+
 App.MapPost("/api/auth/register", async (
     RegisterAccountRequest Permintaan,
     AccountRegistrationService LayananRegistrasi,
