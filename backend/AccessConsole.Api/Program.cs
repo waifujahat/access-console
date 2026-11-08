@@ -77,12 +77,25 @@ Builder.Services.AddRateLimiter(Opsi =>
                 ?? "tidak-diketahui",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 10,
+                PermitLimit = 120,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
                 AutoReplenishment = true
             }));
 });
+
+Builder.Services.AddSingleton<PartitionedRateLimiter<Guid>>(
+    _ => PartitionedRateLimiter.Create<Guid, Guid>(IdAkun =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: IdAkun,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }
+)));
 
 Builder.Services.AddAuthentication(IdentityConstants.BearerScheme)
     .AddBearerToken(IdentityConstants.BearerScheme);
@@ -270,9 +283,12 @@ App.MapPost("/api/auth/register", async (
     }
 }).RequireRateLimiting("registrasi");
 
+
 App.MapPost("/api/auth/login", async (
     LoginAccountRequest Permintaan,
-    SignInManager<AccessConsoleIdentityUser> PengelolaMasuk) =>
+    SignInManager<AccessConsoleIdentityUser> PengelolaMasuk,
+    PartitionedRateLimiter<Guid> PembatasAkun,
+    CancellationToken TokenPembatalan) =>
 {
     if (string.IsNullOrWhiteSpace(Permintaan.Email) ||
         string.IsNullOrWhiteSpace(Permintaan.KataSandi))
@@ -284,11 +300,30 @@ App.MapPost("/api/auth/login", async (
             });
     }
 
+    var Email = Permintaan.Email.Trim();
+
+    var Pengguna = await PengelolaMasuk.UserManager
+        .FindByNameAsync(Email);
+
+    if (Pengguna is not null)
+    {
+        using var Izin = await PembatasAkun.AcquireAsync(
+            Pengguna.Id,
+            permitCount: 1,
+            cancellationToken: TokenPembatalan);
+
+        if (!Izin.IsAcquired)
+        {
+            return Results.StatusCode(
+                StatusCodes.Status429TooManyRequests);
+        }
+    }
+
     PengelolaMasuk.AuthenticationScheme =
         IdentityConstants.BearerScheme;
 
     var Hasil = await PengelolaMasuk.PasswordSignInAsync(
-        Permintaan.Email,
+        Email,
         Permintaan.KataSandi,
         isPersistent: false,
         lockoutOnFailure: true);
