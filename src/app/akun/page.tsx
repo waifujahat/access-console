@@ -23,6 +23,12 @@ export const metadata: Metadata = {
   },
 };
 
+type ParameterHalamanAkun = {
+  searchParams: Promise<{
+    kesalahan?: string | string[];
+  }>;
+};
+
 type DataAkun = {
   id: string;
   email: string;
@@ -53,6 +59,41 @@ function PesanStatus({ pesan }: { pesan: string }) {
     >
       {pesan}
     </div>
+  );
+}
+
+async function PemberitahuanKeluar({
+  searchParams,
+}: ParameterHalamanAkun) {
+  const parameter = await searchParams;
+
+  const kodeKesalahan =
+    typeof parameter.kesalahan === "string"
+      ? parameter.kesalahan
+      : "";
+
+  const pesanKesalahan: Record<string, string> = {
+    "konfigurasi-logout":
+      "Layanan logout belum dikonfigurasi",
+    "koneksi-logout":
+      "Backend tidak dapat dihubungi, sesi belum berhasil diakhiri",
+    logout:
+      "Logout belum berhasil, coba lagi",
+  };
+
+  const pesan = pesanKesalahan[kodeKesalahan];
+
+  if (!pesan) {
+    return null;
+  }
+
+  return (
+    <p
+      role="alert"
+      className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700"
+    >
+      {pesan}
+    </p>
   );
 }
 
@@ -191,19 +232,21 @@ async function KontenAkun() {
           </dd>
         </div>
       </dl>
-    <form action={keluarAkun} className="mt-8">
-    <button
-        type="submit"
-        className="inline-flex items-center justify-center rounded-lg border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-100"
-    >
-        Keluar
-    </button>
-    </form>
+      <form action={keluarAkun} className="mt-8">
+        <button
+          type="submit"
+          className="inline-flex items-center justify-center rounded-lg border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-100"
+        >
+          Keluar
+        </button>
+      </form>
     </section>
   );
 }
 
-export default function HalamanAkun() {
+export default function HalamanAkun({
+  searchParams,
+}: ParameterHalamanAkun) {
   return (
     <main className="min-h-screen bg-[#f6f8fc] text-slate-900">
       <div className="mx-auto max-w-3xl px-6">
@@ -226,6 +269,12 @@ export default function HalamanAkun() {
           aria-label="Informasi akun pribadi"
           className="py-12 sm:py-16"
         >
+          <Suspense fallback={null}>
+            <PemberitahuanKeluar
+              searchParams={searchParams}
+            />
+          </Suspense>
+
           <Suspense
             fallback={<PesanStatus pesan="Memuat informasi akun" />}
           >

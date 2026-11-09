@@ -37,6 +37,24 @@ jobs:
     name: Backend Verification
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: access_console
+          POSTGRES_DB: access_console
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U access_console -d access_console"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ConnectionStrings__AccessConsole: "Host=127.0.0.1;Port=5432;Database=access_console;Username=access_console;Password=ci-only-password"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -54,3 +72,86 @@ jobs:
 
       - name: Build ASP.NET Core
         run: dotnet build backend/AccessConsole.Api/AccessConsole.Api.csproj --no-restore --configuration Release
+
+      - name: Install EF Core tools
+        run: dotnet tool install dotnet-ef --tool-path ./.tools --version 10.0.14
+
+      - name: Apply database migrations
+        run: >-
+          ./.tools/dotnet-ef database update
+          --project backend/AccessConsole.Api/AccessConsole.Api.csproj
+          --startup-project backend/AccessConsole.Api/AccessConsole.Api.csproj
+          --context AccessConsoleDbContext
+
+      - name: Test authentication and API health
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE="http://127.0.0.1:5080"
+
+          dotnet run \
+            --project backend/AccessConsole.Api/AccessConsole.Api.csproj \
+            --configuration Release \
+            --no-build \
+            --no-launch-profile \
+            -- --urls "$BASE" > api.log 2>&1 &
+
+          API_PID=$!
+          trap 'kill "$API_PID" 2>/dev/null || true' EXIT
+
+          SIAP=0
+          for nomor in {1..30}; do
+            if curl -fsS "$BASE/health/ready" > /dev/null; then
+              SIAP=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$SIAP" -ne 1 ]; then
+            cat api.log
+            exit 1
+          fi
+
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/health")" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/health/ready")" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/accounts/me")" = "401"
+
+          REG_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Content-Type: application/json" \
+            -d '{"email":"ci.user@example.com","displayName":"CI User","kataSandi":"Testing123!"}' \
+            "$BASE/api/auth/register")
+
+          test "$REG_STATUS" = "201"
+
+          LOGIN_JSON=$(curl -fsS \
+            -H "Content-Type: application/json" \
+            -d '{"email":"ci.user@example.com","kataSandi":"Testing123!"}' \
+            "$BASE/api/auth/login")
+
+          ACCESS_TOKEN=$(printf '%s' "$LOGIN_JSON" | python3 -c \
+            'import json,sys; print(json.load(sys.stdin)["accessToken"])')
+
+          test -n "$ACCESS_TOKEN"
+
+          STATUS_AKUN=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "$BASE/api/accounts/me")
+
+          test "$STATUS_AKUN" = "200"
+
+          STATUS_LOGOUT=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "$BASE/api/auth/logout")
+
+          test "$STATUS_LOGOUT" = "204"
+
+          STATUS_TOKEN_LAMA=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "$BASE/api/accounts/me")
+
+          test "$STATUS_TOKEN_LAMA" = "401"
+
+          echo "API health, registration, login, and logout tests passed"

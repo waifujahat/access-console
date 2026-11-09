@@ -8,6 +8,8 @@
 
 using System.Net;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
@@ -15,6 +17,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Waifujahat.AccessConsole.Api.Application.Accounts;
 using Waifujahat.AccessConsole.Api.Contracts.Accounts;
+using Waifujahat.AccessConsole.Api.Infrastructure.Authentication;
 using Waifujahat.AccessConsole.Api.Infrastructure.Identity;
 using Waifujahat.AccessConsole.Api.Infrastructure.Persistence;
 
@@ -27,8 +30,6 @@ if (string.IsNullOrWhiteSpace(KoneksiDatabase))
     throw new InvalidOperationException(
         "Connection string AccessConsole belum dikonfigurasi");
 }
-
-Builder.Services.AddHealthChecks();
 
 var AlamatProksi = Builder.Configuration["ReverseProxy:TrustedProxy"];
 
@@ -105,6 +106,11 @@ Builder.Services.AddAuthorization();
 Builder.Services.AddDbContext<AccessConsoleDbContext>(
     Opsi => Opsi.UseNpgsql(KoneksiDatabase));
 
+Builder.Services.AddHealthChecks()
+    .AddDbContextCheck<AccessConsoleDbContext>(
+        name: "postgresql",
+        tags: ["ready"]);
+
 Builder.Services.AddIdentityCore<AccessConsoleIdentityUser>(Opsi =>
 {
     Opsi.User.RequireUniqueEmail = true;
@@ -127,6 +133,8 @@ Builder.Services.AddScoped<IAccountRepository, PostgresAccountRepository>();
 
 Builder.Services.AddScoped<AccountRegistrationService>();
 
+Builder.Services.AddScoped<AccessTokenRevocationService>();
+
 var App = Builder.Build();
 
 if (!string.IsNullOrWhiteSpace(AlamatProksi))
@@ -137,9 +145,54 @@ if (!string.IsNullOrWhiteSpace(AlamatProksi))
 App.UseRouting();
 App.UseRateLimiter();
 App.UseAuthentication();
+
+App.Use(async (Konteks, Berikutnya) =>
+{
+    if (Konteks.User.Identity?.IsAuthenticated == true)
+    {
+        var Otorisasi = Konteks.Request.Headers.Authorization.ToString();
+
+        if (Otorisasi.StartsWith(
+            "Bearer ",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            var Token = Otorisasi["Bearer ".Length..].Trim();
+
+            if (!string.IsNullOrWhiteSpace(Token))
+            {
+                var Layanan = Konteks.RequestServices
+                    .GetRequiredService<AccessTokenRevocationService>();
+
+                var SudahDicabut = await Layanan.SudahDicabutAsync(
+                    Token,
+                    Konteks.RequestAborted);
+
+                if (SudahDicabut)
+                {
+                    Konteks.Response.StatusCode =
+                        StatusCodes.Status401Unauthorized;
+
+                    return;
+                }
+            }
+        }
+    }
+
+    await Berikutnya();
+});
+
 App.UseAuthorization();
 
-App.MapHealthChecks("/health");
+App.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+App.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = Pemeriksaan =>
+        Pemeriksaan.Tags.Contains("ready")
+});
 
 App.MapPost("/api/accounts", () =>
 {
@@ -335,6 +388,45 @@ App.MapPost("/api/auth/login", async (
 
     return TypedResults.Empty;
 }).RequireRateLimiting("login");
+
+App.MapPost("/api/auth/logout", async (
+    HttpContext KonteksHttp,
+    AccessTokenRevocationService LayananPencabutan,
+    CancellationToken TokenPembatalan) =>
+{
+    var HasilAutentikasi = await KonteksHttp.AuthenticateAsync(
+        IdentityConstants.BearerScheme);
+
+    if (!HasilAutentikasi.Succeeded ||
+        HasilAutentikasi.Properties?.ExpiresUtc is not
+        { } WaktuKedaluwarsa)
+    {
+        return Results.Unauthorized();
+    }
+
+    var Otorisasi = KonteksHttp.Request.Headers.Authorization.ToString();
+
+    if (!Otorisasi.StartsWith(
+        "Bearer ",
+        StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Unauthorized();
+    }
+
+    var Token = Otorisasi["Bearer ".Length..].Trim();
+
+    if (string.IsNullOrWhiteSpace(Token))
+    {
+        return Results.Unauthorized();
+    }
+
+    await LayananPencabutan.CabutAsync(
+        Token,
+        WaktuKedaluwarsa.ToUniversalTime(),
+        TokenPembatalan);
+
+    return Results.NoContent();
+}).RequireAuthorization();
 
 App.Run();
 
