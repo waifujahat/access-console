@@ -1,0 +1,32 @@
+# .NET build artifacts
+**/bin/
+**/obj/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Local configuration and secrets
+.env
+.env.*
+*.user
+*.suo
+*.pfx
+*.pem
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Local test artifacts
+TestResults/
+coverage/
+
+# Docker files
+Dockerfile
+.dockerignore

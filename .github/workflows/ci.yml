@@ -85,6 +85,8 @@ jobs:
 
       - name: Test authentication and API health
         shell: bash
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
         run: |
           set -euo pipefail
 

@@ -6,6 +6,7 @@
  * Configures account persistence using Entity Framework Core
  */
 
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -17,18 +18,24 @@ namespace Waifujahat
 {
     namespace AccessConsole.Api.Infrastructure.Persistence
     {
-        public sealed class AccessConsoleDbContext : IdentityDbContext<AccessConsoleIdentityUser, IdentityRole<Guid>, Guid>
+
+        public sealed class AccessConsoleDbContext :
+            IdentityDbContext<AccessConsoleIdentityUser, IdentityRole<Guid>, Guid>,
+            IDataProtectionKeyContext
         {
             public AccessConsoleDbContext(
-                DbContextOptions<AccessConsoleDbContext> Options)
-                : base(Options)
+             DbContextOptions<AccessConsoleDbContext> Options)
+            : base(Options)
             {
             }
 
             public DbSet<Account> Accounts => Set<Account>();
 
             public DbSet<RevokedAccessToken> RevokedAccessTokens =>
-            Set<RevokedAccessToken>();
+                Set<RevokedAccessToken>();
+
+            public DbSet<DataProtectionKey> DataProtectionKeys =>
+                Set<DataProtectionKey>();
 
             protected override void OnModelCreating(ModelBuilder ModelBuilder)
             {

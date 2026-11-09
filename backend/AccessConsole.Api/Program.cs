@@ -7,8 +7,11 @@
  */
 
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -105,6 +108,35 @@ Builder.Services.AddAuthorization();
 
 Builder.Services.AddDbContext<AccessConsoleDbContext>(
     Opsi => Opsi.UseNpgsql(KoneksiDatabase));
+
+var ProteksiData = Builder.Services.AddDataProtection()
+    .SetApplicationName("Waifujahat.AccessConsole.Api")
+    .PersistKeysToDbContext<AccessConsoleDbContext>();
+
+var SertifikatBase64 = Builder.Configuration["DataProtection:CertificateBase64"];
+var SandiSertifikat = Builder.Configuration["DataProtection:CertificatePassword"];
+
+if (!string.IsNullOrWhiteSpace(SertifikatBase64) &&
+    !string.IsNullOrWhiteSpace(SandiSertifikat))
+{
+    var Sertifikat = X509CertificateLoader.LoadPkcs12(
+        Convert.FromBase64String(SertifikatBase64),
+        SandiSertifikat,
+        X509KeyStorageFlags.EphemeralKeySet);
+
+    if (!Sertifikat.HasPrivateKey)
+    {
+        throw new InvalidOperationException(
+            "Sertifikat Data Protection harus memiliki private key");
+    }
+
+    ProteksiData.ProtectKeysWithCertificate(Sertifikat);
+}
+else if (!Builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException(
+        "Sertifikat Data Protection wajib dikonfigurasi di luar Development");
+}
 
 Builder.Services.AddHealthChecks()
     .AddDbContextCheck<AccessConsoleDbContext>(
