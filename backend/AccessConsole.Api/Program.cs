@@ -21,6 +21,7 @@ using Npgsql;
 using Waifujahat.AccessConsole.Api.Application.Accounts;
 using Waifujahat.AccessConsole.Api.Contracts.Accounts;
 using Waifujahat.AccessConsole.Api.Infrastructure.Authentication;
+using Waifujahat.AccessConsole.Api.Infrastructure.Configuration;
 using Waifujahat.AccessConsole.Api.Infrastructure.Identity;
 using Waifujahat.AccessConsole.Api.Infrastructure.Persistence;
 
@@ -59,47 +60,7 @@ if (!string.IsNullOrWhiteSpace(AlamatProksi))
     });
 }
 
-Builder.Services.AddRateLimiter(Opsi =>
-{
-    Opsi.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-    Opsi.AddPolicy("registrasi", Konteks =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: Konteks.Connection.RemoteIpAddress?.ToString()
-                ?? "tidak-diketahui",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                AutoReplenishment = true
-            }));
-
-    Opsi.AddPolicy("login", Konteks =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: Konteks.Connection.RemoteIpAddress?.ToString()
-                ?? "tidak-diketahui",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 120,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                AutoReplenishment = true
-            }));
-});
-
-Builder.Services.AddSingleton<PartitionedRateLimiter<Guid>>(
-    _ => PartitionedRateLimiter.Create<Guid, Guid>(IdAkun =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: IdAkun,
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                AutoReplenishment = true
-            }
-)));
+Builder.Services.TambahkanPembatasPermintaan();
 
 Builder.Services.AddAuthentication(IdentityConstants.BearerScheme)
     .AddBearerToken(IdentityConstants.BearerScheme);
