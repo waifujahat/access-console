@@ -20,6 +20,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Waifujahat.AccessConsole.Api.Application.Accounts;
 using Waifujahat.AccessConsole.Api.Contracts.Accounts;
+using Waifujahat.AccessConsole.Api.Endpoints;
 using Waifujahat.AccessConsole.Api.Infrastructure.Authentication;
 using Waifujahat.AccessConsole.Api.Infrastructure.Configuration;
 using Waifujahat.AccessConsole.Api.Infrastructure.Identity;
@@ -198,75 +199,7 @@ App.MapHealthChecks("/health/ready", new HealthCheckOptions
         Pemeriksaan.Tags.Contains("ready")
 });
 
-App.MapPost("/api/accounts", () =>
-{
-    return Results.StatusCode(StatusCodes.Status410Gone);
-});
-
-App.MapGet("/api/accounts/{Id:guid}", async (
-    Guid Id,
-    HttpContext KonteksHttp,
-    UserManager<AccessConsoleIdentityUser> PengelolaPengguna,
-    IAccountRepository Repositori,
-    CancellationToken TokenPembatalan) =>
-{
-    var IdPengguna = PengelolaPengguna.GetUserId(KonteksHttp.User);
-
-    if (!Guid.TryParse(IdPengguna, out var IdPemilik) ||
-        IdPemilik != Id)
-    {
-        return Results.Forbid();
-    }
-
-    var Akun = await Repositori.GetByIdAsync(
-        Id,
-        TokenPembatalan);
-
-    if (Akun is null)
-    {
-        return Results.NotFound();
-    }
-
-    var Respons = new AccountResponse(
-        Akun.Id,
-        Akun.Email,
-        Akun.DisplayName,
-        Akun.CreatedatUTC);
-
-    return Results.Ok(Respons);
-}).RequireAuthorization();
-
-App.MapGet("/api/accounts/me", async (
-    HttpContext KonteksHttp,
-    UserManager<AccessConsoleIdentityUser> PengelolaPengguna,
-    IAccountRepository Repositori,
-    CancellationToken TokenPembatalan) =>
-{
-    var IdPengguna = PengelolaPengguna.GetUserId(
-        KonteksHttp.User);
-
-    if (!Guid.TryParse(IdPengguna, out var IdAkun))
-    {
-        return Results.Unauthorized();
-    }
-
-    var Akun = await Repositori.GetByIdAsync(
-        IdAkun,
-        TokenPembatalan);
-
-    if (Akun is null)
-    {
-        return Results.NotFound();
-    }
-
-    var Respons = new AccountResponse(
-        Akun.Id,
-        Akun.Email,
-        Akun.DisplayName,
-        Akun.CreatedatUTC);
-
-    return Results.Ok(Respons);
-}).RequireAuthorization();
+App.MapAccountEndpoints();
 
 App.MapPost("/api/auth/register", async (
     RegisterAccountRequest Permintaan,
