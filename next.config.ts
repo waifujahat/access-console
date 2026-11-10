@@ -4,6 +4,20 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
 
+  async headers() {
+    return [
+      {
+        source: "/akun",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "private, no-store",
+          },
+        ],
+      },
+    ];
+  },
+
   async redirects() {
     return [
       {

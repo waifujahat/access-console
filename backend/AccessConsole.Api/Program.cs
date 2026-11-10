@@ -174,6 +174,17 @@ if (!string.IsNullOrWhiteSpace(AlamatProksi))
     App.UseForwardedHeaders();
 }
 
+App.Use(async (Konteks, Berikutnya) =>
+{
+    if (Konteks.Request.Path.StartsWithSegments("/api/accounts") ||
+        Konteks.Request.Path.StartsWithSegments("/api/auth"))
+    {
+        Konteks.Response.Headers.CacheControl = "no-store";
+    }
+
+    await Berikutnya();
+});
+
 App.UseRouting();
 App.UseRateLimiter();
 App.UseAuthentication();
