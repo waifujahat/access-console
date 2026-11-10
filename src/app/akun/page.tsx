@@ -12,6 +12,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { dapatkanAlamatBackend } from "../../lib/alamat-backend";
 import { keluarAkun } from "./keluar-action";
 
 export const metadata: Metadata = {
@@ -105,11 +106,7 @@ async function KontenAkun() {
     redirect("/login");
   }
 
-  const AlamatBackend =
-    process.env.ACCESS_CONSOLE_API_URL?.trim() ||
-    (process.env.NODE_ENV === "development"
-      ? "http://127.0.0.1:5080"
-      : null);
+  const AlamatBackend = dapatkanAlamatBackend();
 
   if (!AlamatBackend) {
     return (

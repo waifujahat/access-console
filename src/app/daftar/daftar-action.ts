@@ -4,12 +4,13 @@
  * Namespace : Waifujahat.AccessConsole.Frontend.Actions
  * Module    : AccountRegistration
  *
- * Handles account registration by validating user input and sending registration requests to the ASP.NET Core API
+ * Handles account registration by validating user input and sending registration requests to ASP.NET Core API
  */
 
 "use server";
 
 import { redirect } from "next/navigation";
+import { dapatkanAlamatBackend } from "../../lib/alamat-backend";
 
 export async function daftarAkun(formulir: FormData): Promise<void> {
   const namaPengguna = formulir.get("namaPengguna");
@@ -50,11 +51,7 @@ export async function daftarAkun(formulir: FormData): Promise<void> {
     redirect("/daftar?kesalahan=sandi");
   }
 
-  const alamatBackend =
-    process.env.ACCESS_CONSOLE_API_URL?.trim() ||
-    (process.env.NODE_ENV === "development"
-      ? "http://127.0.0.1:5080"
-      : null);
+  const alamatBackend = dapatkanAlamatBackend();
 
   if (!alamatBackend) {
     redirect("/daftar?kesalahan=konfigurasi");

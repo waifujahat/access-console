@@ -11,6 +11,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { dapatkanAlamatBackend } from "../../lib/alamat-backend";
 
 export async function keluarAkun(): Promise<void> {
   const penyimpananCookie = await cookies();
@@ -20,11 +21,7 @@ export async function keluarAkun(): Promise<void> {
     redirect("/login");
   }
 
-  const alamatBackend =
-    process.env.ACCESS_CONSOLE_API_URL?.trim() ||
-    (process.env.NODE_ENV === "development"
-      ? "http://127.0.0.1:5080"
-      : null);
+  const alamatBackend = dapatkanAlamatBackend();
 
   if (!alamatBackend) {
     redirect("/akun?kesalahan=konfigurasi-logout");

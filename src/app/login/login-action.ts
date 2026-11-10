@@ -4,13 +4,14 @@
  * Namespace : Waifujahat.AccessConsole.Frontend.Authentication
  * Module    : LoginAction
  *
- * Handles account authentication through the ASP.NET Core API and stores the access token in an HTTP-only cookie
+ * Handles account authentication through ASP.NET Core API and stores the access token in an HTTP-only cookie
  */
 
 "use server";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { dapatkanAlamatBackend } from "../../lib/alamat-backend";
 
 export async function masukAkun(Formulir: FormData) {
   const Email = Formulir.get("email");
@@ -25,11 +26,7 @@ export async function masukAkun(Formulir: FormData) {
     redirect("/login?kesalahan=input");
   }
 
-  const AlamatBackend =
-    process.env.ACCESS_CONSOLE_API_URL?.trim() ||
-    (process.env.NODE_ENV === "development"
-      ? "http://127.0.0.1:5080"
-      : null);
+  const AlamatBackend = dapatkanAlamatBackend();
 
   if (!AlamatBackend) {
     redirect("/login?kesalahan=konfigurasi");
