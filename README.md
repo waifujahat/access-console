@@ -267,6 +267,14 @@ npm.cmd run dev
 Jangan memasukkan connection string berisi kata sandi, file `.env`, sertifikat atau access token ke dalam Git. Gunakan HTTPS dan reverse proxy tepercaya untuk deployment production.
 Access Console merupakan proyek IAM untuk demonstrasi arsitektur dan praktik keamanan aplikasi. Penerapan production lebih luas memerlukan evaluasi lanjutan, termasuk penyimpanan rate limit terdistribusi, pengelolaan operasional token serta sertifikat dan lain-lain.
 
+## Dokumentasi repository
+
+- [Lisensi MIT](LICENSE)
+- [Panduan kontribusi](CONTRIBUTING.md)
+- [Kebijakan keamanan dan pelaporan kerentanan](SECURITY.md)
+
+Lisensi MIT berlaku untuk kode asli proyek ini. Aset dan dependensi pihak ketiga tetap tunduk pada ketentuan pemilik atau lisensinya masing-masing.
+
 ---
 
 <p align="center">
