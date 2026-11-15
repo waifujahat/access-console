@@ -272,6 +272,7 @@ Access Console merupakan proyek IAM untuk demonstrasi arsitektur dan praktik kea
 - [Lisensi MIT](LICENSE)
 - [Panduan kontribusi](CONTRIBUTING.md)
 - [Kebijakan keamanan dan pelaporan kerentanan](SECURITY.md)
+- [Panduan deployment Casdoor dan OAuth](docs/deployment-casdoor.md)
 
 Lisensi MIT berlaku untuk kode asli proyek ini. Aset dan dependensi pihak ketiga tetap tunduk pada ketentuan pemilik atau lisensinya masing-masing.
 

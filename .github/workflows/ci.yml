@@ -165,3 +165,50 @@ jobs:
           test "$STATUS_TOKEN_LAMA" = "401"
 
           echo "API health, registration, login, and logout tests passed"
+
+      - name: Verify production Casdoor endpoint protection
+        shell: bash
+        env:
+          ASPNETCORE_ENVIRONMENT: Production
+          CASDOOR_ISSUER: https://casdoor.example.invalid
+          CASDOOR_CLIENT_ID: ci-only-client
+        run: |
+          set -euo pipefail
+
+          BASE="http://127.0.0.1:5081"
+          CERT_DIR=$(mktemp -d)
+          export DataProtection__CertificatePassword="$(openssl rand -hex 32)"
+
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj "/CN=Access Console CI" \
+            -keyout "$CERT_DIR/key.pem" -out "$CERT_DIR/cert.pem"
+          openssl pkcs12 -export -inkey "$CERT_DIR/key.pem" \
+            -in "$CERT_DIR/cert.pem" -out "$CERT_DIR/cert.pfx" \
+            -passout env:DataProtection__CertificatePassword
+          export DataProtection__CertificateBase64="$(base64 -w 0 "$CERT_DIR/cert.pfx")"
+
+          dotnet run \
+            --project backend/AccessConsole.Api/AccessConsole.Api.csproj \
+            --configuration Release --no-build --no-launch-profile \
+            -- --urls "$BASE" > api-production.log 2>&1 &
+
+          API_PID=$!
+          trap 'kill "$API_PID" 2>/dev/null || true; rm -f "$CERT_DIR/key.pem" "$CERT_DIR/cert.pem" "$CERT_DIR/cert.pfx"; rmdir "$CERT_DIR"' EXIT
+
+          for nomor in {1..30}; do
+            if curl -fsS "$BASE/health/ready" > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl -fsS "$BASE/health/ready" > /dev/null
+
+          for endpoint in verify exchange link; do
+            STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
+              -X POST -H 'Content-Type: application/json' \
+              -d '{"kataSandi":null}' "$BASE/api/auth/casdoor/$endpoint")
+            test "$STATUS" = "401"
+          done
+
+          echo "Production Casdoor endpoints require authentication"

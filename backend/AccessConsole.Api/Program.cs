@@ -299,7 +299,7 @@ App.MapHealthChecks("/health/ready", new HealthCheckOptions
 
 App.MapAccountEndpoints();
 
-if (CasdoorAktif && App.Environment.IsDevelopment())
+if (CasdoorAktif)
 {
     App.MapCasdoorAuthenticationEndpoints();
 }
