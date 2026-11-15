@@ -31,7 +31,15 @@ jobs:
         run: npm run lint
 
       - name: Build Next.js
-        run: npm run build
+        env:
+          CASDOOR_ISSUER: "http://127.0.0.1:8000"
+          CASDOOR_CLIENT_ID: "ci-only-client"
+          CASDOOR_CLIENT_SECRET: "ci-only-client-secret"
+          CASDOOR_GOOGLE_PROVIDER: "provider_oauth_google"
+          CASDOOR_GITHUB_PROVIDER: "provider_oauth_github"
+        run: |
+          export AUTH_SECRET="$(openssl rand -base64 32)"
+          npm run build
 
   backend:
     name: Backend Verification
