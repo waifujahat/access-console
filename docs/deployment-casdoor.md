@@ -4,32 +4,47 @@ Panduan untuk mengaktifkan login Google, GitHub dan pengaitan akun Access Consol
 
 ## 1. PostgreSQL Neon
 
-Buat project Neon terpisah untuk Casdoor dengan database `casdoor` dan role khusus yang memiliki database tersebut. Jangan menggunakan database atau kredensial Access Console. Pilih region sedekat mungkin dengan server Render.
+Buat project Neon terpisah untuk Casdoor dengan database `casdoor` dan role khusus yang memiliki database tersebut. Jangan menggunakan database atau kredensial Access Console. Pilih region database sedekat mungkin dengan region Vercel Casdoor.
 
 Gunakan koneksi langsung (non-pooler), dengan TLS dan validasi sertifikat. Format konfigurasi Casdoor untuk PostgreSQL:
 
 ```text
-host=<neon-direct-host> port=5432 user=<casdoor-role> password=<password> dbname=casdoor sslmode=verify-full
+host=<neon-direct-host> port=5432 user=<casdoor-role> password='<password>' dbname=casdoor sslmode=verify-full sslrootcert=/etc/ssl/certs/ca-certificates.crt
 ```
 
 Isi nilai nyata hanya melalui dashboard hosting. Jangan menyimpan connection string atau kredensial di Git. Jika sudah memiliki pengguna Casdoor lokal yang perlu dipertahankan, rencanakan migrasi database dan identitas terpisah sebelum mengubah issuer. Identitas eksternal Access Console menggunakan pasangan issuer dan subject, bukan email.
 
-## 2. Render
+## 2. Vercel Container
 
-Deploy Blueprint `render.yaml` dari repository ini atau buat Web Service dari image yang sama. Blueprint menggunakan image Casdoor standar yang versinya ditentukan secara eksplisit, bukan image all-in-one dengan SQLite.
+Gunakan project Vercel ketiga yang terpisah dari frontend dan backend. Root project harus `deployment/casdoor`, dengan framework Container dan `Dockerfile.vercel`. Container menggunakan image Casdoor standar dengan versi yang ditentukan secara eksplisit, bukan image all-in-one dengan SQLite.
 
-Paket Free ditujukan untuk demo. Layanan dapat berhenti sementara jika tidak aktif, dan filesystem serta sesi Casdoor lokal tidak persisten saat restart. Database, pengguna dan konfigurasi Casdoor tetap disimpan di Neon. Untuk penggunaan dengan kebutuhan ketersediaan yang lebih tinggi, gunakan compute selalu aktif dan pertimbangkan Redis untuk sesi.
+Runtime Container Vercel masih beta dan berjalan pada Functions. Database, pengguna dan konfigurasi Casdoor disimpan di Neon, tetapi sesi lokal Casdoor berada pada filesystem sementara dan dapat hilang ketika instance berubah. Karena itu, deployment ini merupakan uji kelayakan untuk demo, bukan jaminan kestabilan produksi. Uji OAuth sesudah cold start dan pada permintaan berurutan. Jika sesi tidak konsisten, jangan aktifkan OAuth pada frontend production sebelum penyimpanan sesi bersama yang kompatibel tersedia. Periksa batas penggunaan paket Hobby sebelum deployment.
+
+Siapkan project melalui CLI dari direktori `deployment/casdoor`:
+
+```powershell
+npx vercel@latest link
+npx vercel@latest open
+```
+
+Pilih project baru bernama `access-console-casdoor`, bukan project frontend atau backend yang sudah ada. Periksa bahwa framework Container terdeteksi. Catat domain production sesungguhnya dari dashboard.
 
 Isi variabel berikut sebelum deployment pertama:
 
 | Variabel | Nilai |
 | --- | --- |
+| `PORT` | `8000` |
 | `dataSourceName` | Connection string PostgreSQL Casdoor dengan TLS |
-| `origin` | URL HTTPS publik layanan Casdoor di Render |
-| `originFrontend` | URL HTTPS publik yang sama |
+| `origin` | URL HTTPS publik production layanan Casdoor di Vercel |
 | `initAdminPassword` | Kata sandi admin awal acak dan kuat |
 
 Pastikan URL `origin` sama dengan URL layanan sesungguhnya (tanpa trailing slash). Jangan mengaktifkan instance publik dengan kredensial admin bawaan atau halaman pendaftaran admin terbuka. Nilai `initAdminPassword` berlaku hanya saat inisialisasi database baru.
+
+Setelah environment variables Production tersimpan, deploy dari direktori yang sama:
+
+```powershell
+npx vercel@latest deploy --prod --project access-console-casdoor
+```
 
 Verifikasi `/api/health` dan `/.well-known/openid-configuration`. Periksa bahwa `issuer` dalam discovery document sama persis dengan URL HTTPS Casdoor yang digunakan frontend dan backend.
 
@@ -97,5 +112,5 @@ Jangan menganggap deployment berhasil sampai kedua provider dan pengaitan akun t
 - [Casdoor: Docker](https://casdoor.ai/docs/basic/try-with-docker/)
 - [Casdoor: konfigurasi database](https://casdoor.ai/docs/basic/server-installation/)
 - [Casdoor: konfigurasi aplikasi](https://casdoor.ai/docs/application/config/)
-- [Render: Blueprint specification](https://render.com/docs/blueprint-spec)
-- [Render: Free services](https://render.com/docs/free)
+- [Vercel: Container runtime](https://vercel.com/kb/guide/docker)
+- [Vercel: Deploy from CLI](https://vercel.com/docs/projects/deploy-from-cli)

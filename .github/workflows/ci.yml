@@ -212,3 +212,57 @@ jobs:
           done
 
           echo "Production Casdoor endpoints require authentication"
+
+  casdoor:
+    name: Casdoor Container Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: casdoor
+          POSTGRES_DB: casdoor
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U casdoor -d casdoor"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build Casdoor container
+        run: docker build -f deployment/casdoor/Dockerfile.vercel -t access-console-casdoor:ci deployment/casdoor
+
+      - name: Verify startup and OIDC discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run -d --name casdoor-ci --network host \
+            -e PORT=8000 \
+            -e 'dataSourceName=host=127.0.0.1 port=5432 user=casdoor password=ci-only-password dbname=casdoor sslmode=disable' \
+            -e origin=https://casdoor.example.invalid \
+            -e "initAdminPassword=$(openssl rand -hex 24)" \
+            access-console-casdoor:ci
+
+          trap 'docker rm -f casdoor-ci >/dev/null 2>&1 || true' EXIT
+
+          for nomor in {1..90}; do
+            if curl -fsS http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+
+          curl -fsS http://127.0.0.1:8000/api/health >/dev/null
+          curl -fsS http://127.0.0.1:8000/.well-known/openid-configuration | python3 -c \
+            'import json,sys; assert json.load(sys.stdin)["issuer"] == "https://casdoor.example.invalid"'
+
+          echo "Casdoor PostgreSQL startup, health and OIDC discovery passed"
