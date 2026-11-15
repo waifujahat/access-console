@@ -18,7 +18,9 @@ Isi nilai nyata hanya melalui dashboard hosting. Jangan menyimpan connection str
 
 Gunakan project Vercel ketiga yang terpisah dari frontend dan backend. Root project harus `deployment/casdoor`, dengan framework Container dan `Dockerfile.vercel`. Container menggunakan image Casdoor standar dengan versi yang ditentukan secara eksplisit, bukan image all-in-one dengan SQLite.
 
-Runtime Container Vercel masih beta dan berjalan pada Functions. Database, pengguna dan konfigurasi Casdoor disimpan di Neon, tetapi sesi lokal Casdoor berada pada filesystem sementara dan dapat hilang ketika instance berubah. Karena itu, deployment ini merupakan uji kelayakan untuk demo, bukan jaminan kestabilan produksi. Uji OAuth sesudah cold start dan pada permintaan berurutan. Jika sesi tidak konsisten, jangan aktifkan OAuth pada frontend production sebelum penyimpanan sesi bersama yang kompatibel tersedia. Periksa batas penggunaan paket Hobby sebelum deployment.
+Runtime Container Vercel masih beta dan berjalan pada Functions. Database, pengguna dan konfigurasi Casdoor disimpan di Neon. Gunakan Upstash Redis Free untuk menyimpan sesi autentikasi secara bersama, karena filesystem lokal tidak persisten antar-instance. Container menjalankan tunnel TLS melalui loopback, memvalidasi sertifikat Redis dan gagal saat startup jika koneksi tidak terautentikasi. Uji OAuth sesudah cold start dan pada permintaan berurutan. Periksa batas penggunaan paket Hobby dan paket Redis sebelum deployment.
+
+Buat database Redis khusus Casdoor di Upstash, dengan region sedekat mungkin dengan `iad1`. Ambil hostname, port dan token dari bagian koneksi Redis TCP (bukan REST URL). Jangan menonaktifkan TLS.
 
 Siapkan project melalui CLI dari direktori `deployment/casdoor`:
 
@@ -37,6 +39,11 @@ Isi variabel berikut sebelum deployment pertama:
 | `dataSourceName` | Connection string PostgreSQL Casdoor dengan TLS |
 | `origin` | URL HTTPS publik production layanan Casdoor di Vercel |
 | `initAdminPassword` | Kata sandi admin awal acak dan kuat |
+| `REDIS_HOST` | Hostname Redis Upstash tanpa skema atau port |
+| `REDIS_PORT` | Port Redis Upstash, biasanya `6379` |
+| `REDIS_PASSWORD` | Token/password Redis (bukan token OIDC Vercel) |
+
+Simpan `REDIS_PASSWORD` sebagai Secret. Jangan mengatur `redisEndpoint` secara manual; startup container menyusunnya dengan koneksi loopback ke tunnel TLS. Pengujian CI memverifikasi login admin, akses akun dan keberlangsungan sesi setelah container dibuat ulang.
 
 Pastikan URL `origin` sama dengan URL layanan sesungguhnya (tanpa trailing slash). Jangan mengaktifkan instance publik dengan kredensial admin bawaan atau halaman pendaftaran admin terbuka. Nilai `initAdminPassword` berlaku hanya saat inisialisasi database baru.
 
@@ -114,3 +121,4 @@ Jangan menganggap deployment berhasil sampai kedua provider dan pengaitan akun t
 - [Casdoor: konfigurasi aplikasi](https://casdoor.ai/docs/application/config/)
 - [Vercel: Container runtime](https://vercel.com/kb/guide/docker)
 - [Vercel: Deploy from CLI](https://vercel.com/docs/projects/deploy-from-cli)
+- [Upstash: Redis security](https://upstash.com/docs/redis/features/security)

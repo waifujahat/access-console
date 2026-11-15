@@ -240,29 +240,68 @@ jobs:
       - name: Build Casdoor container
         run: docker build -f deployment/casdoor/Dockerfile.vercel -t access-console-casdoor:ci deployment/casdoor
 
-      - name: Verify startup and OIDC discovery
+      - name: Verify startup, OIDC discovery and shared sessions
         shell: bash
         run: |
           set -euo pipefail
 
-          docker run -d --name casdoor-ci --network host \
-            -e PORT=8000 \
-            -e 'dataSourceName=host=127.0.0.1 port=5432 user=casdoor password=ci-only-password dbname=casdoor sslmode=disable' \
-            -e origin=https://casdoor.example.invalid \
-            -e "initAdminPassword=$(openssl rand -hex 24)" \
-            access-console-casdoor:ci
+          CERT_DIR=$(mktemp -d)
+          COOKIE_JAR=$(mktemp)
+          ADMIN_PASSWORD=$(openssl rand -hex 24)
+          trap 'docker rm -f casdoor-ci redis-ci >/dev/null 2>&1 || true; rm -f "$CERT_DIR/cert.pem" "$CERT_DIR/key.pem" "$COOKIE_JAR"; rmdir "$CERT_DIR"' EXIT
 
-          trap 'docker rm -f casdoor-ci >/dev/null 2>&1 || true' EXIT
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost' \
+            -keyout "$CERT_DIR/key.pem" -out "$CERT_DIR/cert.pem"
+          chmod 755 "$CERT_DIR"
+          chmod 644 "$CERT_DIR/key.pem" "$CERT_DIR/cert.pem"
 
-          for nomor in {1..90}; do
-            if curl -fsS http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
-              break
+          docker run -d --name redis-ci --network host \
+            -v "$CERT_DIR:/certs:ro" redis:7-alpine redis-server \
+            --port 0 --tls-port 6379 --tls-cert-file /certs/cert.pem \
+            --tls-key-file /certs/key.pem --tls-ca-cert-file /certs/cert.pem \
+            --tls-auth-clients no --requirepass ci-only-redis-password
+
+          start_casdoor() {
+            docker run -d --name casdoor-ci --network host \
+              -v "$CERT_DIR/cert.pem:/etc/ssl/certs/ca-certificates.crt:ro" \
+              -e PORT=8000 \
+              -e 'dataSourceName=host=127.0.0.1 port=5432 user=casdoor password=ci-only-password dbname=casdoor sslmode=disable' \
+              -e origin=https://casdoor.example.invalid \
+              -e "initAdminPassword=$ADMIN_PASSWORD" \
+              -e REDIS_HOST=localhost -e REDIS_PORT=6379 \
+              -e REDIS_PASSWORD=ci-only-redis-password \
+              access-console-casdoor:ci
+
+            for nomor in {1..90}; do
+              if curl -fsS http://localhost:8000/api/health >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
+
+            if ! curl -fsS http://localhost:8000/api/health >/dev/null; then
+              docker logs casdoor-ci
+              return 1
             fi
-            sleep 2
-          done
+          }
 
-          curl -fsS http://127.0.0.1:8000/api/health >/dev/null
-          curl -fsS http://127.0.0.1:8000/.well-known/openid-configuration | python3 -c \
+          start_casdoor
+          curl -fsS http://localhost:8000/.well-known/openid-configuration | python3 -c \
             'import json,sys; assert json.load(sys.stdin)["issuer"] == "https://casdoor.example.invalid"'
 
-          echo "Casdoor PostgreSQL startup, health and OIDC discovery passed"
+          curl -fsS -c "$COOKIE_JAR" -H 'Content-Type: application/json' \
+            -d "{\"organization\":\"built-in\",\"application\":\"app-built-in\",\"username\":\"admin\",\"password\":\"$ADMIN_PASSWORD\",\"type\":\"login\",\"signinMethod\":\"Password\"}" \
+            http://localhost:8000/api/login | python3 -c \
+            'import json,sys; r=json.load(sys.stdin); assert r["status"] == "ok", r.get("msg")'
+
+          check_account() {
+            curl -fsS -b "$COOKIE_JAR" http://localhost:8000/api/get-account | python3 -c \
+              'import json,sys; r=json.load(sys.stdin); assert r["status"] == "ok" and r["name"] == "admin", r.get("msg")'
+          }
+
+          check_account
+          docker rm -f casdoor-ci
+          start_casdoor
+          check_account
+          echo "Casdoor PostgreSQL startup, Redis TLS and admin session after container replacement passed"
