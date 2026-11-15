@@ -13,7 +13,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { dapatkanAlamatBackend } from "../../lib/alamat-backend";
+import { bacaTokenPengaitanCasdoor } from "../../lib/sesi-pengaitan-casdoor";
 import { keluarAkun } from "./keluar-action";
+import {HubungkanCasdoor,KonfirmasiHubungkanCasdoor,} from "./hubungkan-casdoor-action";
+import { connection } from "next/server";
 
 export const metadata: Metadata = {
   title: "My Account | Access Console",
@@ -27,6 +30,7 @@ export const metadata: Metadata = {
 type ParameterHalamanAkun = {
   searchParams: Promise<{
     kesalahan?: string | string[];
+    pengaitan?: string | string[];
   }>;
 };
 
@@ -74,6 +78,14 @@ async function PemberitahuanKeluar({
       : "";
 
   const pesanKesalahan: Record<string, string> = {
+    "sandi-casdoor": "Kata sandi wajib diisi",
+    "sesi-casdoor": "Verifikasi Casdoor diperlukan kembali",
+    "konfigurasi-casdoor": "Konfigurasi Casdoor belum tersedia",
+    "koneksi-casdoor": "Layanan Casdoor tidak dapat dihubungi",
+    "autentikasi-casdoor": "Konfirmasi akun gagal atau sesi tidak valid",
+    "konflik-casdoor": "Identitas Casdoor sudah terhubung ke akun lain",
+    "batas-casdoor": "Terlalu banyak percobaan, coba kembali nanti",
+    "server-casdoor": "Pengaitan akun belum berhasil",
     "konfigurasi-logout":
       "Layanan logout belum dikonfigurasi",
     "koneksi-logout":
@@ -81,6 +93,17 @@ async function PemberitahuanKeluar({
     logout:
       "Logout belum berhasil, coba lagi",
   };
+
+    if (parameter.pengaitan === "berhasil") {
+    return (
+      <p
+        role="status"
+        className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800"
+      >
+        Identitas berhasil dihubungkan ke akun Access Console
+      </p>
+    );
+  }
 
   const pesan = pesanKesalahan[kodeKesalahan];
 
@@ -98,13 +121,25 @@ async function PemberitahuanKeluar({
   );
 }
 
-async function KontenAkun() {
+async function KontenAkun({
+  searchParams,
+}: ParameterHalamanAkun) {
+  await connection();
+
   const PenyimpananCookie = await cookies();
   const Token = PenyimpananCookie.get("access_console_token")?.value;
 
   if (!Token) {
     redirect("/login");
   }
+
+  const Parameter = await searchParams;
+
+  const PerluKonfirmasi =
+  Parameter.pengaitan === "konfirmasi" &&
+  Boolean(
+    await bacaTokenPengaitanCasdoor(Token).catch(() => null),
+  );
 
   const AlamatBackend = dapatkanAlamatBackend();
 
@@ -229,6 +264,96 @@ async function KontenAkun() {
           </dd>
         </div>
       </dl>
+      <form action={HubungkanCasdoor} className="mt-6 space-y-3">
+        <button
+          type="submit"
+          name="provider"
+          value="google"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        >
+          <svg
+            aria-hidden="true"
+            className="h-4 w-4"
+            viewBox="0 0 48 48"
+          >
+            <path
+              fill="#4285F4"
+              d="M43.61 24.46c0-1.36-.12-2.66-.35-3.92H24v7.43h11.01a9.42 9.42 0 0 1-4.08 6.2v5.15h6.61c3.87-3.57 6.07-8.83 6.07-14.86Z"
+            />
+            <path
+              fill="#34A853"
+              d="M24 44c5.51 0 10.13-1.83 13.54-4.68l-6.61-5.15c-1.83 1.23-4.17 1.96-6.93 1.96-5.33 0-9.85-3.6-11.47-8.44H5.71v5.31A20 20 0 0 0 24 44Z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M12.53 27.69a12 12 0 0 1 0-7.38V15H5.71a20 20 0 0 0 0 18l6.82-5.31Z"
+            />
+            <path
+              fill="#EA4335"
+              d="M24 11.87c3 0 5.69 1.03 7.81 3.06l5.86-5.86C34.12 5.77 29.5 4 24 4A20 20 0 0 0 5.71 15l6.82 5.31C14.15 15.47 18.67 11.87 24 11.87Z"
+            />
+          </svg>
+
+          Hubungkan Google
+        </button>
+
+        <button
+          type="submit"
+          name="provider"
+          value="github"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        >
+          <svg
+            aria-hidden="true"
+            className="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.72 1.16 1.72 1.16 1 .1.9-1.57 3.27-.8a2.39 2.39 0 0 1 .71-1.5c-2.5-.28-5.12-1.25-5.12-5.56a4.35 4.35 0 0 1 1.16-3.03 4.05 4.05 0 0 1 .11-2.99s.95-.3 3.1 1.16a10.75 10.75 0 0 1 5.64 0c2.15-1.46 3.1-1.16 3.1-1.16a4.05 4.05 0 0 1 .11 2.99 4.34 4.34 0 0 1 1.16 3.03c0 4.32-2.63 5.27-5.14 5.55.4.35.76 1.03.76 2.08v4.84c0 .3.2.65.77.54A11.25 11.25 0 0 0 12 .75Z" />
+          </svg>
+
+          Hubungkan GitHub
+        </button>
+      </form>
+
+      {PerluKonfirmasi && (
+      <form
+        action={KonfirmasiHubungkanCasdoor}
+        className="mt-6 space-y-4 rounded-xl border border-slate-200 p-5"
+      >
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">
+            Konfirmasi pengaitan akun
+          </h3>
+        </div>
+
+        <div>
+          <label
+            htmlFor="kataSandiCasdoor"
+            className="block text-sm font-medium text-slate-700"
+          >
+            Kata sandi Access Console
+          </label>
+
+          <input
+            id="kataSandiCasdoor"
+            name="kataSandi"
+            type="password"
+            autoComplete="current-password"
+            required
+            className="mt-2 h-11 w-full rounded-lg border border-slate-300 px-4 text-sm text-slate-900 outline-none focus:border-indigo-500"
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="rounded-lg bg-indigo-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+        >
+          Konfirmasi dan hubungkan akun
+        </button>
+      </form>
+    )}
+
       <form action={keluarAkun} className="mt-8">
         <button
           type="submit"
@@ -275,7 +400,7 @@ export default function HalamanAkun({
           <Suspense
             fallback={<PesanStatus pesan="Memuat informasi akun" />}
           >
-            <KontenAkun />
+            <KontenAkun searchParams={searchParams} />
           </Suspense>
         </section>
       </div>

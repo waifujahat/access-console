@@ -10,6 +10,7 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -63,10 +64,105 @@ if (!string.IsNullOrWhiteSpace(AlamatProksi))
 
 Builder.Services.TambahkanPembatasPermintaan();
 
-Builder.Services.AddAuthentication(IdentityConstants.BearerScheme)
+var AlamatCasdoor = Builder.Configuration["CASDOOR_ISSUER"]?.Trim();
+var ClientIdCasdoor = Builder.Configuration["CASDOOR_CLIENT_ID"]?.Trim();
+
+var CasdoorAktif =
+    !string.IsNullOrWhiteSpace(AlamatCasdoor) &&
+    !string.IsNullOrWhiteSpace(ClientIdCasdoor);
+
+if (!CasdoorAktif &&
+    (!string.IsNullOrWhiteSpace(AlamatCasdoor) ||
+     !string.IsNullOrWhiteSpace(ClientIdCasdoor)))
+{
+    throw new InvalidOperationException(
+        "Konfigurasi Casdoor belum lengkap");
+}
+
+var Autentikasi = Builder.Services
+    .AddAuthentication(IdentityConstants.BearerScheme)
     .AddBearerToken(IdentityConstants.BearerScheme);
 
-Builder.Services.AddAuthorization();
+if (CasdoorAktif)
+{
+    if (!Uri.TryCreate(
+        AlamatCasdoor,
+        UriKind.Absolute,
+        out var UriCasdoor))
+    {
+        throw new InvalidOperationException(
+            "Alamat Casdoor tidak valid");
+    }
+
+    var MenggunakanHttps =
+        UriCasdoor.Scheme == Uri.UriSchemeHttps;
+
+    var HttpLokal =
+        Builder.Environment.IsDevelopment() &&
+        UriCasdoor.IsLoopback &&
+        UriCasdoor.Scheme == Uri.UriSchemeHttp;
+
+    if (!MenggunakanHttps && !HttpLokal)
+    {
+        throw new InvalidOperationException(
+            "Casdoor harus menggunakan HTTPS di luar Development lokal");
+    }
+
+    Autentikasi.AddJwtBearer("CasdoorOIDC", Opsi =>
+    {
+        Opsi.Authority = AlamatCasdoor!.TrimEnd('/');
+        Opsi.Audience = ClientIdCasdoor;
+        Opsi.RequireHttpsMetadata = MenggunakanHttps;
+        Opsi.MapInboundClaims = false;
+        Opsi.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = Konteks =>
+            {
+                if (Konteks.Request.Path == "/api/auth/casdoor/link")
+                {
+                    var TokenCasdoor = Konteks.Request.Headers
+                        ["X-Casdoor-Token"].ToString();
+
+                    if (!string.IsNullOrWhiteSpace(TokenCasdoor))
+                    {
+                        Konteks.Token = TokenCasdoor;
+                    }
+                }
+
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = Konteks =>
+            {
+                var JenisToken = Konteks.Principal?
+                    .FindFirst("tokenType")?.Value;
+
+                var IdPengguna = Konteks.Principal?
+                    .FindFirst("sub")?.Value;
+
+                if (JenisToken != "access-token" ||
+                    string.IsNullOrWhiteSpace(IdPengguna))
+                {
+                    Konteks.Fail("Identitas Casdoor tidak valid");
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+    });
+}
+
+Builder.Services.AddAuthorization(Opsi =>
+{
+    if (CasdoorAktif)
+    {
+        Opsi.AddPolicy("CasdoorOIDC", Kebijakan =>
+        {
+            Kebijakan
+                .AddAuthenticationSchemes("CasdoorOIDC")
+                .RequireAuthenticatedUser();
+        });
+    }
+});
 
 Builder.Services.AddDbContext<AccessConsoleDbContext>(
     Opsi => Opsi.UseNpgsql(KoneksiDatabase));
@@ -121,11 +217,13 @@ Builder.Services.AddIdentityCore<AccessConsoleIdentityUser>(Opsi =>
 })
 .AddRoles<IdentityRole<Guid>>()
 .AddEntityFrameworkStores<AccessConsoleDbContext>()
-.AddSignInManager();
+.AddSignInManager<AccessConsoleSignInManager>();
 
 Builder.Services.AddScoped<IAccountRepository, PostgresAccountRepository>();
 
 Builder.Services.AddScoped<AccountRegistrationService>();
+
+Builder.Services.AddScoped<CasdoorAccountService>();
 
 Builder.Services.AddScoped<AccessTokenRevocationService>();
 
@@ -200,6 +298,11 @@ App.MapHealthChecks("/health/ready", new HealthCheckOptions
 });
 
 App.MapAccountEndpoints();
+
+if (CasdoorAktif && App.Environment.IsDevelopment())
+{
+    App.MapCasdoorAuthenticationEndpoints();
+}
 
 App.MapPost("/api/auth/register", async (
     RegisterAccountRequest Permintaan,
