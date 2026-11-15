@@ -114,6 +114,7 @@ if (CasdoorAktif)
         Opsi.Audience = ClientIdCasdoor;
         Opsi.RequireHttpsMetadata = MenggunakanHttps;
         Opsi.MapInboundClaims = false;
+        Opsi.SaveToken = true;
         Opsi.Events = new JwtBearerEvents
         {
             OnMessageReceived = Konteks =>
@@ -224,6 +225,15 @@ Builder.Services.AddScoped<IAccountRepository, PostgresAccountRepository>();
 Builder.Services.AddScoped<AccountRegistrationService>();
 
 Builder.Services.AddScoped<CasdoorAccountService>();
+
+Builder.Services.AddHttpClient<CasdoorProviderStatusService>(Klien =>
+{
+    Klien.Timeout = TimeSpan.FromSeconds(4);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false
+});
 
 Builder.Services.AddScoped<AccessTokenRevocationService>();
 

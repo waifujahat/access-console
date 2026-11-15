@@ -33,6 +33,7 @@ namespace Waifujahat.AccessConsole.Api.Endpoints
                 HttpContext KonteksHttp,
                 IConfiguration Konfigurasi,
                 CasdoorAccountService LayananAkun,
+                CasdoorProviderStatusService LayananStatus,
                 SignInManager<AccessConsoleIdentityUser> PengelolaMasuk,
                 CancellationToken TokenPembatalan) =>
             {
@@ -87,6 +88,12 @@ namespace Waifujahat.AccessConsole.Api.Endpoints
                     return Results.Forbid();
                 }
 
+                await LayananStatus.SinkronkanAsync(
+                    Pengguna.Id,
+                    Subject,
+                    await KonteksHttp.GetTokenAsync("CasdoorOIDC", "access_token"),
+                    TokenPembatalan);
+
                 PengelolaMasuk.AuthenticationScheme =
                     IdentityConstants.BearerScheme;
 
@@ -105,7 +112,9 @@ namespace Waifujahat.AccessConsole.Api.Endpoints
                 IConfiguration Konfigurasi,
                 UserManager<AccessConsoleIdentityUser> PengelolaPengguna,
                 SignInManager<AccessConsoleIdentityUser> PengelolaMasuk,
-                CasdoorAccountService LayananAkun) =>
+                CasdoorAccountService LayananAkun,
+                CasdoorProviderStatusService LayananStatus,
+                CancellationToken TokenPembatalan) =>
             {
                 var HasilLokal = await KonteksHttp.AuthenticateAsync(
                     IdentityConstants.BearerScheme);
@@ -207,6 +216,12 @@ namespace Waifujahat.AccessConsole.Api.Endpoints
                 {
                     return Results.Conflict(new { Kesalahan });
                 }
+
+                await LayananStatus.SinkronkanAsync(
+                    IdPengguna,
+                    Subject,
+                    HasilCasdoor.Properties?.GetTokenValue("access_token"),
+                    TokenPembatalan);
 
                 return Results.NoContent();
             })

@@ -14,6 +14,8 @@ namespace Waifujahat
             Guid Id,
             string Email,
             string DisplayName,
-            DateTimeOffset CreatedatUTC);
+            DateTimeOffset CreatedatUTC,
+            bool? GoogleConnected,
+            bool? GithubConnected);
     }
 }

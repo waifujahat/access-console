@@ -34,6 +34,7 @@ namespace Waifujahat
                     HttpContext KonteksHttp,
                     UserManager<AccessConsoleIdentityUser> PengelolaPengguna,
                     IAccountRepository Repositori,
+                    CasdoorProviderStatusService LayananStatus,
                     CancellationToken TokenPembatalan) =>
                 {
                     var IdPengguna = PengelolaPengguna.GetUserId(
@@ -54,11 +55,16 @@ namespace Waifujahat
                         return Results.NotFound();
                     }
 
+                    var (Google, Github) = await LayananStatus.DapatkanStatusAsync(
+                        Akun.Id, TokenPembatalan);
+
                     var Respons = new AccountResponse(
                         Akun.Id,
                         Akun.Email,
                         Akun.DisplayName,
-                        Akun.CreatedatUTC);
+                        Akun.CreatedatUTC,
+                        Google,
+                        Github);
 
                     return Results.Ok(Respons);
                 }).RequireAuthorization();
@@ -67,6 +73,7 @@ namespace Waifujahat
                     HttpContext KonteksHttp,
                     UserManager<AccessConsoleIdentityUser> PengelolaPengguna,
                     IAccountRepository Repositori,
+                    CasdoorProviderStatusService LayananStatus,
                     CancellationToken TokenPembatalan) =>
                 {
                     var IdPengguna = PengelolaPengguna.GetUserId(
@@ -86,11 +93,16 @@ namespace Waifujahat
                         return Results.NotFound();
                     }
 
+                    var (Google, Github) = await LayananStatus.DapatkanStatusAsync(
+                        Akun.Id, TokenPembatalan);
+
                     var Respons = new AccountResponse(
                         Akun.Id,
                         Akun.Email,
                         Akun.DisplayName,
-                        Akun.CreatedatUTC);
+                        Akun.CreatedatUTC,
+                        Google,
+                        Github);
 
                     return Results.Ok(Respons);
                 }).RequireAuthorization();
