@@ -11,11 +11,11 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { dapatkanAlamatBackend } from "../../lib/alamat-backend";
 import { bacaTokenPengaitanCasdoor } from "../../lib/sesi-pengaitan-casdoor";
 import { keluarAkun } from "./keluar-action";
-import {HubungkanCasdoor,KonfirmasiHubungkanCasdoor,} from "./hubungkan-casdoor-action";
+import { HubungkanCasdoor, KonfirmasiHubungkanCasdoor } from "./hubungkan-casdoor-action";
 import { connection } from "next/server";
 
 export const metadata: Metadata = {
@@ -39,6 +39,8 @@ type DataAkun = {
   email: string;
   displayName: string;
   createdatUTC: string;
+  googleConnected?: boolean | null;
+  githubConnected?: boolean | null;
 };
 
 function DataAkunValid(Data: unknown): Data is DataAkun {
@@ -52,7 +54,54 @@ function DataAkunValid(Data: unknown): Data is DataAkun {
     typeof Akun.id === "string" &&
     typeof Akun.email === "string" &&
     typeof Akun.displayName === "string" &&
-    typeof Akun.createdatUTC === "string"
+    typeof Akun.createdatUTC === "string" &&
+    (Akun.googleConnected == null || typeof Akun.googleConnected === "boolean") &&
+    (Akun.githubConnected == null || typeof Akun.githubConnected === "boolean")
+  );
+}
+
+function StatusProvider({
+  nama,
+  provider,
+  terhubung,
+  children,
+}: {
+  nama: string;
+  provider: "google" | "github";
+  terhubung: boolean | null;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-950">
+        {children}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-slate-900">{nama}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          {terhubung === true
+            ? "Akun sudah terhubung"
+            : terhubung === false
+              ? "Akun belum terhubung"
+              : "Status belum terverifikasi"}
+        </p>
+      </div>
+      {terhubung === true ? (
+        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+          Terhubung
+        </span>
+      ) : (
+        <button
+          type="submit"
+          name="provider"
+          value={provider}
+          aria-label={`${terhubung === false ? "Hubungkan" : "Verifikasi"} ${nama}`}
+          className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        >
+          {terhubung === false ? "Hubungkan" : "Verifikasi"}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -264,13 +313,12 @@ async function KontenAkun({
           </dd>
         </div>
       </dl>
-      <form action={HubungkanCasdoor} className="mt-6 space-y-3">
-        <button
-          type="submit"
-          name="provider"
-          value="google"
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
+      <form action={HubungkanCasdoor} className="mt-8 space-y-3 border-t border-slate-100 pt-6">
+        <h3 className="text-sm font-semibold text-slate-900">Connected Accounts</h3>
+        <p className="text-sm text-slate-500">
+          Identitas terverifikasi yang terhubung dengan akun Anda
+        </p>
+        <StatusProvider nama="Google" provider="google" terhubung={Data.googleConnected ?? null}>
           <svg
             aria-hidden="true"
             className="h-4 w-4"
@@ -294,15 +342,9 @@ async function KontenAkun({
             />
           </svg>
 
-          Hubungkan Google
-        </button>
+        </StatusProvider>
 
-        <button
-          type="submit"
-          name="provider"
-          value="github"
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
+        <StatusProvider nama="GitHub" provider="github" terhubung={Data.githubConnected ?? null}>
           <svg
             aria-hidden="true"
             className="h-4 w-4"
@@ -312,8 +354,12 @@ async function KontenAkun({
             <path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.72 1.16 1.72 1.16 1 .1.9-1.57 3.27-.8a2.39 2.39 0 0 1 .71-1.5c-2.5-.28-5.12-1.25-5.12-5.56a4.35 4.35 0 0 1 1.16-3.03 4.05 4.05 0 0 1 .11-2.99s.95-.3 3.1 1.16a10.75 10.75 0 0 1 5.64 0c2.15-1.46 3.1-1.16 3.1-1.16a4.05 4.05 0 0 1 .11 2.99 4.34 4.34 0 0 1 1.16 3.03c0 4.32-2.63 5.27-5.14 5.55.4.35.76 1.03.76 2.08v4.84c0 .3.2.65.77.54A11.25 11.25 0 0 0 12 .75Z" />
           </svg>
 
-          Hubungkan GitHub
-        </button>
+        </StatusProvider>
+        {(Data.googleConnected == null || Data.githubConnected == null) && (
+          <p className="text-xs text-slate-500">
+            Masuk ulang melalui Casdoor untuk memperbarui status pengaitan akun.
+          </p>
+        )}
       </form>
 
       {PerluKonfirmasi && (
