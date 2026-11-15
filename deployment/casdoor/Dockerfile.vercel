@@ -2,7 +2,7 @@ FROM casbin/casdoor:v4.27.1
 
 USER root
 RUN sed -i 's|http://|https://|g' /etc/apk/repositories \
-    && apk add --no-cache stunnel \
+    && apk add --no-cache stunnel valkey-cli \
     && sed -i 's/^runmode = dev.*/runmode = prod/' /conf/app.conf \
     && grep -qx 'runmode = prod' /conf/app.conf
 COPY --chmod=0755 start.sh /usr/local/bin/start-casdoor

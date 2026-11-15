@@ -60,10 +60,9 @@ trap 'kill "$tunnel_pid" 2>/dev/null || true' EXIT
 # session fallback is allowed and the password is never passed as an argument.
 attempt=0
 while [ "$attempt" -lt 10 ]; do
-    response=$(printf '*2\r\n$4\r\nAUTH\r\n$%s\r\n%s\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nQUIT\r\n' \
-        "${#REDIS_PASSWORD}" "$REDIS_PASSWORD" | timeout 3 nc 127.0.0.1 6380 2>/dev/null || true)
-    if [ "$(printf '%s\n' "$response" | tr -d '\r' | sed -n '1p')" = '+OK' ] && \
-       [ "$(printf '%s\n' "$response" | tr -d '\r' | sed -n '2p')" = '+PONG' ]; then
+    # Use a protocol-aware client which waits for AUTH before sending PING.
+    if response=$(VALKEYCLI_AUTH="$REDIS_PASSWORD" timeout 5 valkey-cli \
+        -h 127.0.0.1 -p 6380 --raw PING 2>/dev/null) && [ "$response" = PONG ]; then
         export redisEndpoint="127.0.0.1:6380,10,$REDIS_PASSWORD,0"
         echo "Redis TLS session store ready"
         exec /server
