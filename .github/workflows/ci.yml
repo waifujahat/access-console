@@ -47,7 +47,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17
+        image: postgres:17.12-trixie
         env:
           POSTGRES_USER: access_console
           POSTGRES_DB: access_console
@@ -223,7 +223,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17
+        image: postgres:17.12-trixie
         env:
           POSTGRES_USER: casdoor
           POSTGRES_DB: casdoor
