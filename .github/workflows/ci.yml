@@ -38,8 +38,36 @@ jobs:
           CASDOOR_GOOGLE_PROVIDER: "provider_oauth_google"
           CASDOOR_GITHUB_PROVIDER: "provider_oauth_github"
         run: |
+          set -euo pipefail
+
           export AUTH_SECRET="$(openssl rand -base64 32)"
           npm run build
+
+          BASE="http://127.0.0.1:3000"
+
+          ./node_modules/.bin/next start \
+            --hostname 127.0.0.1 \
+            --port 3000 > frontend.log 2>&1 &
+
+          FRONTEND_PID=$!
+          trap 'kill "$FRONTEND_PID" 2>/dev/null || true' EXIT
+
+          for nomor in {1..30}; do
+            if curl -fsS "$BASE/login" > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          HEADERS=$(curl -fsS -D - -o /dev/null "$BASE/login" | tr -d '\r')
+
+          grep -Fxi "X-Content-Type-Options: nosniff" <<< "$HEADERS"
+          grep -Fxi "X-Frame-Options: DENY" <<< "$HEADERS"
+          grep -Fxi "Referrer-Policy: strict-origin-when-cross-origin" <<< "$HEADERS"
+          grep -Fxi "Permissions-Policy: camera=(), microphone=(), geolocation=()" <<< "$HEADERS"
+          grep -Fxi "Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'" <<< "$HEADERS"
+
+          echo "Frontend security headers verified"
 
   backend:
     name: Backend Verification
@@ -134,6 +162,15 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/health")" = "200"
           test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/health/ready")" = "200"
           test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/accounts/me")" = "401"
+          HEADERS=$(curl -sS -D - -o /dev/null "$BASE/api/accounts/me" | tr -d '\r')
+
+          grep -Fxi "X-Content-Type-Options: nosniff" <<< "$HEADERS"
+          grep -Fxi "X-Frame-Options: DENY" <<< "$HEADERS"
+          grep -Fxi "Referrer-Policy: no-referrer" <<< "$HEADERS"
+          grep -Fxi "Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'" <<< "$HEADERS"
+          grep -Fxi "Cache-Control: no-store" <<< "$HEADERS"
+
+          echo "Backend security headers verified"
 
           REG_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
             -H "Content-Type: application/json" \
