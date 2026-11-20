@@ -246,6 +246,12 @@ if (!string.IsNullOrWhiteSpace(AlamatProksi))
 
 App.Use(async (Konteks, Berikutnya) =>
 {
+    Konteks.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    Konteks.Response.Headers["X-Frame-Options"] = "DENY";
+    Konteks.Response.Headers["Referrer-Policy"] = "no-referrer";
+    Konteks.Response.Headers["Content-Security-Policy"] =
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'";
+
     if (Konteks.Request.Path.StartsWithSegments("/api/accounts") ||
         Konteks.Request.Path.StartsWithSegments("/api/auth"))
     {
