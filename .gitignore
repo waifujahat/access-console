@@ -49,6 +49,3 @@ next-env.d.ts
 .vs/
 *.user
 *.suo
-
-# Local development documentation
-/CODE_STYLE.md

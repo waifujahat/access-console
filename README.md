@@ -128,7 +128,6 @@ access-console/
 │   └── Program.cs                     # Konfigurasi dan endpoint autentikasi
 ├── deployment/casdoor/                # Container Casdoor dan startup Redis TLS
 ├── docs/deployment-casdoor.md         # Konfigurasi deployment identitas
-├── public/                            # Aset frontend
 ├── scripts/                           # Skrip backend dan pengujian autentikasi
 ├── src/                               # Halaman, Auth.js dan utilitas Next.js
 ├── compose.yaml                       # PostgreSQL lokal
