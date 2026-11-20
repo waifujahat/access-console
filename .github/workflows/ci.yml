@@ -91,6 +91,13 @@ jobs:
           --startup-project backend/AccessConsole.Api/AccessConsole.Api.csproj
           --context AccessConsoleDbContext
 
+      - name: Build backend container
+        run: >-
+          docker build --pull
+          -f backend/AccessConsole.Api/Dockerfile
+          -t access-console-api:ci
+          backend/AccessConsole.Api
+
       - name: Test authentication and API health
         shell: bash
         env:
@@ -100,15 +107,15 @@ jobs:
 
           BASE="http://127.0.0.1:5080"
 
-          dotnet run \
-            --project backend/AccessConsole.Api/AccessConsole.Api.csproj \
-            --configuration Release \
-            --no-build \
-            --no-launch-profile \
-            -- --urls "$BASE" > api.log 2>&1 &
+          trap 'docker rm -f access-console-api-ci >/dev/null 2>&1 || true' EXIT
 
-          API_PID=$!
-          trap 'kill "$API_PID" 2>/dev/null || true' EXIT
+          docker run -d \
+            --name access-console-api-ci \
+            --network host \
+            -e ASPNETCORE_ENVIRONMENT=Development \
+            -e "ASPNETCORE_URLS=$BASE" \
+            -e "ConnectionStrings__AccessConsole=${ConnectionStrings__AccessConsole};GSS Encryption Mode=Disable" \
+            access-console-api:ci
 
           SIAP=0
           for nomor in {1..30}; do
@@ -120,7 +127,7 @@ jobs:
           done
 
           if [ "$SIAP" -ne 1 ]; then
-            cat api.log
+            docker logs access-console-api-ci
             exit 1
           fi
 
@@ -190,13 +197,19 @@ jobs:
             -passout env:DataProtection__CertificatePassword
           export DataProtection__CertificateBase64="$(base64 -w 0 "$CERT_DIR/cert.pfx")"
 
-          dotnet run \
-            --project backend/AccessConsole.Api/AccessConsole.Api.csproj \
-            --configuration Release --no-build --no-launch-profile \
-            -- --urls "$BASE" > api-production.log 2>&1 &
+                    trap 'docker rm -f access-console-api-production-ci >/dev/null 2>&1 || true; rm -f "$CERT_DIR/key.pem" "$CERT_DIR/cert.pem" "$CERT_DIR/cert.pfx"; rmdir "$CERT_DIR"' EXIT
 
-          API_PID=$!
-          trap 'kill "$API_PID" 2>/dev/null || true; rm -f "$CERT_DIR/key.pem" "$CERT_DIR/cert.pem" "$CERT_DIR/cert.pfx"; rmdir "$CERT_DIR"' EXIT
+          docker run -d \
+            --name access-console-api-production-ci \
+            --network host \
+            -e ASPNETCORE_ENVIRONMENT=Production \
+            -e "ASPNETCORE_URLS=$BASE" \
+            -e "ConnectionStrings__AccessConsole=${ConnectionStrings__AccessConsole};GSS Encryption Mode=Disable" \
+            -e CASDOOR_ISSUER \
+            -e CASDOOR_CLIENT_ID \
+            -e DataProtection__CertificateBase64 \
+            -e DataProtection__CertificatePassword \
+            access-console-api:ci
 
           for nomor in {1..30}; do
             if curl -fsS "$BASE/health/ready" > /dev/null; then
